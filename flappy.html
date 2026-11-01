@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flappy Bird</title>
+
+<!-- Twitter Player Card (lo más importante) -->
+<meta name="twitter:card" content="player">
+<meta name="twitter:site" content="@tu_usuario">
+<meta name="twitter:title" content="Flappy Bird">
+<meta name="twitter:description" content="Jugá Flappy Bird directamente desde X">
+<meta name="twitter:player" content="https://TU-DOMINIO.com/flappy.html">
+<meta name="twitter:player:width" content="288">
+<meta name="twitter:player:height" content="512">
+<meta name="twitter:image" content="https://TU-DOMINIO.com/preview.jpg">
+
+<!-- Open Graph (también ayuda) -->
+<meta property="og:title" content="Flappy Bird">
+<meta property="og:description" content="Jugá Flappy Bird desde X">
+<meta property="og:image" content="https://TU-DOMINIO.com/preview.jpg">
+<meta property="og:type" content="website">
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    touch-action: none;
+  }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #70c5ce;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    max-width: 100%;
+    max-height: 100%;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="288" height="512"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const GRAVITY = 0.25;
+const JUMP = -4.6;
+const PIPE_WIDTH = 52;
+const PIPE_GAP = 100;
+const PIPE_SPEED = 2;
+const GROUND_HEIGHT = 112;
+
+let frames = 0;
+let score = 0;
+let best = localStorage.getItem('flappyBest') || 0;
+let state = 'start';
+
+const bird = {
+  x: 50, y: 150, width: 34, height: 24, velocity: 0, rotation: 0,
+  draw() {
+    ctx.save();
+    ctx.translate(this.x + this.width/2, this.y + this.height/2);
+    ctx.rotate(this.rotation);
+    ctx.fillStyle = '#f8b800';
+    ctx.fillRect(-17, -12, 34, 24);
+    ctx.fillStyle = '#f8d030';
+    if (Math.floor(frames/5) % 3 === 0) ctx.fillRect(-10, -5, 18, 10);
+    else ctx.fillRect(-10, 0, 18, 10);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(8, -8, 8, 8);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(12, -5, 3, 3);
+    ctx.fillStyle = '#f07000';
+    ctx.fillRect(15, -2, 10, 6);
+    ctx.restore();
+  },
+  update() {
+    if (state === 'playing') {
+      this.velocity += GRAVITY;
+      this.y += this.velocity;
+      this.rotation = this.velocity >= 0 ? Math.min(Math.PI/4, this.rotation + 0.05) : -0.3;
+    }
+  },
+  flap() { this.velocity = JUMP; },
+  reset() { this.y = 150; this.velocity = 0; this.rotation = 0; }
+};
+
+const pipes = {
+  list: [],
+  reset() { this.list = []; },
+  create() {
+    const topHeight = 50 + Math.random() * 180;
+    this.list.push({ x: canvas.width, top: topHeight, bottom: topHeight + PIPE_GAP, passed: false });
+  },
+  update() {
+    if (state !== 'playing') return;
+    if (frames % 100 === 0) this.create();
+    this.list.forEach((p, i) => {
+      p.x -= PIPE_SPEED;
+      if (bird.x + bird.width > p.x && bird.x < p.x + PIPE_WIDTH &&
+         (bird.y < p.top || bird.y + bird.height > p.bottom)) {
+        state = 'gameover';
+        if (score > best) { best = score; localStorage.setItem('flappyBest', best); }
+      }
+      if (!p.passed && p.x + PIPE_WIDTH < bird.x) { p.passed = true; score++; }
+      if (p.x + PIPE_WIDTH < 0) this.list.splice(i, 1);
+    });
+  },
+  draw() {
+    this.list.forEach(p => {
+      ctx.fillStyle = '#74c01b';
+      ctx.fillRect(p.x, 0, PIPE_WIDTH, p.top);
+      ctx.fillStyle = '#55880f';
+      ctx.fillRect(p.x - 2, p.top - 20, PIPE_WIDTH + 4, 20);
+      ctx.fillStyle = '#74c01b';
+      ctx.fillRect(p.x, p.bottom, PIPE_WIDTH, canvas.height - p.bottom - GROUND_HEIGHT);
+      ctx.fillStyle = '#55880f';
+      ctx.fillRect(p.x - 2, p.bottom, PIPE_WIDTH + 4, 20);
+    });
+  }
+};
+
+const ground = {
+  x: 0,
+  draw() {
+    ctx.fillStyle = '#ded895';
+    ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+    ctx.fillStyle = '#c2a645';
+    ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, 15);
+  },
+  update() { if (state === 'playing') this.x = (this.x - PIPE_SPEED) % 30; }
+};
+
+function drawBackground() {
+  ctx.fillStyle = '#70c5ce';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawUI() {
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  ctx.font = 'bold 32px Courier New';
+  ctx.textAlign = 'center';
+  
+  if (state === 'start') {
+    ctx.strokeText('FLAPPY BIRD', canvas.width/2, 140);
+    ctx.fillText('FLAPPY BIRD', canvas.width/2, 140);
+    ctx.font = '15px Courier New';
+    ctx.strokeText('Click / Space to Start', canvas.width/2, 300);
+    ctx.fillText('Click / Space to Start', canvas.width/2, 300);
+  }
+  if (state === 'playing' || state === 'gameover') {
+    ctx.strokeText(score, canvas.width/2, 70);
+    ctx.fillText(score, canvas.width/2, 70);
+  }
+  if (state === 'gameover') {
+    ctx.font = 'bold 26px Courier New';
+    ctx.strokeText('GAME OVER', canvas.width/2, 200);
+    ctx.fillText('GAME OVER', canvas.width/2, 200);
+    ctx.font = '15px Courier New';
+    ctx.strokeText(`Score: ${score}  Best: ${best}`, canvas.width/2, 250);
+    ctx.fillText(`Score: ${score}  Best: ${best}`, canvas.width/2, 250);
+    ctx.strokeText('Click to Restart', canvas.width/2, 310);
+    ctx.fillText('Click to Restart', canvas.width/2, 310);
+  }
+}
+
+function handleInput() {
+  if (state === 'start') {
+    state = 'playing';
+    bird.reset();
+    pipes.reset();
+    score = 0;
+  } else if (state === 'playing') {
+    bird.flap();
+  } else if (state === 'gameover') {
+    state = 'start';
+    bird.reset();
+    pipes.reset();
+    score = 0;
+  }
+}
+
+canvas.addEventListener('click', handleInput);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); handleInput(); });
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); handleInput(); }
+});
+
+function loop() {
+  frames++;
+  bird.update();
+  pipes.update();
+  ground.update();
+  
+  if (bird.y + bird.height >= canvas.height - GROUND_HEIGHT) {
+    bird.y = canvas.height - GROUND_HEIGHT - bird.height;
+    if (state === 'playing') {
+      state = 'gameover';
+      if (score > best) { best = score; localStorage.setItem('flappyBest', best); }
+    }
+  }
+  
+  drawBackground();
+  pipes.draw();
+  ground.draw();
+  bird.draw();
+  drawUI();
+  
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
